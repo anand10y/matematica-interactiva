@@ -1,191 +1,249 @@
 import streamlit as st
-from sympy import symbols, Eq, expand, factor, sqrt, latex, simplify
-from sympy import Rational, Integer
+from sympy import symbols, Eq, expand, factor, sqrt, latex, simplify, diff, solve
+from sympy import Integer
 import math
+import plotly.graph_objects as go
+import numpy as np
+import random
 
-st.set_page_config(page_title="Matematică - Pași explicați", page_icon="🧮", layout="centered")
+st.set_page_config(page_title="Laborator Matematică Interactiv", page_icon="🧮", layout="wide")
 
-# ----------------- Utilitare -----------------
-x = symbols('x')
+x, y, z = symbols('x y z')
+
+def L(expr):
+    return f"${latex(expr)}$"
 
 def is_perfect_square(n):
-    if n < 0:
-        return False
+    if n < 0: return False
     r = int(math.isqrt(int(n)))
     return r*r == n
 
-def L(expr):
-    """LaTeX safe."""
-    return f"${latex(expr)}$"
-
-# ----------------- Generare pași: Liniară -----------------
-def build_linear_steps(a, b, c, d):
+# ----------------- Pași ecuație liniară -----------------
+def linear_steps(a, b, c, d):
     steps = []
     a, b, c, d = Integer(a), Integer(b), Integer(c), Integer(d)
-
     eq0 = Eq(a*x + b, c*x + d)
-    steps.append(("Enunț", f"Rezolvăm ecuația {L(eq0)}."))
+    steps.append(("Enunț", f"Rezolvăm {L(eq0)}"))
 
-    # 1) Dezvoltăm (formal)
     eq1 = Eq(expand(a*x + b), expand(c*x + d))
-    steps.append(("Dezvoltăm", f"Dezvoltăm termenii (aici rămân la fel): {L(eq1)}."))
+    steps.append(("Dezvoltăm", L(eq1)))
 
-    # 2) Mutăm termenii cu x în stânga (scădem c*x)
     eq2 = Eq(eq1.lhs - c*x, eq1.rhs - c*x)
-    steps.append(("Mutăm x la stânga", f"Scădem {L(c*x)} din ambele părți: {L(eq2)}."))
+    steps.append(("Mutăm x la stânga", L(eq2)))
 
-    # 3) Mutăm termenii constanți în dreapta (scădem b)
     eq3 = Eq(eq2.lhs - b, eq2.rhs - b)
-    steps.append(("Mutăm constantele la dreapta", f"Scădem {L(b)} din ambele părți: {L(eq3)}."))
+    steps.append(("Mutăm constantele la dreapta", L(eq3)))
 
-    # 4) Combinăm termenii asemenea
     lhs_simpl = simplify(eq3.lhs)
     rhs_simpl = simplify(eq3.rhs)
     eq4 = Eq(lhs_simpl, rhs_simpl)
-    steps.append(("Combinăm termenii", f"Combinăm termenii asemenea: {L(eq4)}."))
+    steps.append(("Combinăm termenii", L(eq4)))
 
-    coef_x = simplify(eq4.lhs / x) if eq4.lhs.has(x) and simplify(eq4.lhs/x).free_symbols == set() else a - c
-    # în mod tipic coef_x = a - c, iar dreapta = d - b
-    if isinstance(coef_x, Rational) or isinstance(coef_x, Integer):
-        coef_x = simplify(coef_x)
-    rhs_const = simplify(rhs_simpl)
+    coef_x = simplify(lhs_simpl/x)
+    rhs_const = rhs_simpl
 
-    # 5) Cazuri
     if coef_x == 0:
         if rhs_const == 0:
-            steps.append(("Concluzie", "Obținem identitatea adevărată 0 = 0 ⇒ **infinit de multe soluții**."))
+            steps.append(("Concluzie", "0 = 0 ⇒ infinit de soluții"))
         else:
-            steps.append(("Concluzie", f"Obținem contradicția {L(Eq(0, rhs_const))} ⇒ **fără soluții**."))
+            steps.append(("Concluzie", f"0 = {rhs_const} ⇒ fără soluții"))
         return steps
 
     eq5 = Eq(coef_x*x, rhs_const)
-    steps.append(("Izolăm x", f"Ecuație liniară simplă: {L(eq5)}."))
-
+    steps.append(("Izolăm x", L(eq5)))
     sol = simplify(rhs_const/coef_x)
     eq6 = Eq(x, sol)
-    steps.append(("Împărțim la coeficientul lui x", f"Împărțim ambele părți la {L(coef_x)}: {L(eq6)}."))
-
-    steps.append(("Răspuns", f"Soluția este {L(eq6)}."))
+    steps.append(("Răspuns", L(eq6)))
     return steps
 
-# ----------------- Generare pași: Quadratică -----------------
-def build_quadratic_steps(a, b, c):
+# ----------------- Pași ecuație pătratică -----------------
+def quadratic_steps(a, b, c):
     steps = []
     a, b, c = Integer(a), Integer(b), Integer(c)
-
-    # Dacă a = 0, reducere la liniară bx + c = 0
     if a == 0:
-        steps.append(("Reducere", "Coeficientul lui \(x^2\) este 0 ⇒ ecuația devine liniară."))
-        steps += build_linear_steps(0, b, 0, -c)[1:]  # fără să mai repetăm „Enunț”
+        steps.append(("Reducere", "Devine ecuație liniară"))
+        steps += linear_steps(0, b, 0, -c)[1:]
         return steps
 
     eq0 = Eq(a*x**2 + b*x + c, 0)
-    steps.append(("Enunț", f"Rezolvăm ecuația {L(eq0)}."))
+    steps.append(("Enunț", L(eq0)))
 
-    # 1) Normalizăm (împărțim la a)
     if a != 1:
         eq1 = Eq((a*x**2 + b*x + c)/a, 0)
-        steps.append(("Normalizare", f"Împărțim la {L(a)} (≠0): {L(eq1)} ⇒ {L(Eq(x**2 + (b/a)*x + c/a, 0))}."))
-    A = a
-    B = b
-    C = c
+        steps.append(("Normalizare", L(Eq(x**2 + (b/a)*x + c/a, 0))))
 
-    # 2) Discriminant
-    Delta = simplify(B**2 - 4*A*C)
-    steps.append(("Discriminant", f"Calculăm \(\\Delta = b^2 - 4ac = {latex(B**2)} - 4·{latex(A)}·{latex(C)} = {latex(Delta)}\)."))
+    Delta = simplify(b**2 - 4*a*c)
+    steps.append(("Discriminant", f"Δ = {Delta}"))
 
-    # 3) Formula rădăcinilor
-    root_expr = ((-B) + sqrt(Delta))/(2*A), ((-B) - sqrt(Delta))/(2*A)
-    steps.append(("Formula rădăcinilor", f"{L(Eq(x, (-B+sqrt(Delta))/(2*A)))} și {L(Eq(x, (-B-sqrt(Delta))/(2*A)))}."))
+    root_expr = ((-b + sqrt(Delta))/(2*a), (-b - sqrt(Delta))/(2*a))
 
-    # 4) Cazuri după Δ
     if Delta > 0:
         if is_perfect_square(int(Delta)):
-            r = Integer(int(math.isqrt(int(Delta))))
-            steps.append(("Δ > 0 și pătrat perfect", f"\\(\\Delta={latex(Delta)}={latex(r**2)}\\) ⇒ \\(\\sqrt\\Delta={latex(r)}\\)."))
-            x1 = simplify(( -B + r )/(2*A))
-            x2 = simplify(( -B - r )/(2*A))
-            steps.append(("Soluții reale distincte", f"{L(Eq(x, x1))} și {L(Eq(x, x2))}."))
-            # Factorizare opțională
-            poly = a*x**2 + b*x + c
-            steps.append(("Factorizare", f"{L(poly)} = {L(factor(poly))}."))
+            r = int(math.isqrt(int(Delta)))
+            x1 = simplify((-b + r)/(2*a))
+            x2 = simplify((-b - r)/(2*a))
+            steps.append(("Soluții reale distincte", f"{L(Eq(x,x1))} și {L(Eq(x,x2))}"))
+            steps.append(("Factorizare", L(factor(a*x**2 + b*x + c))))
         else:
-            steps.append(("Δ > 0 (nu e pătrat perfect)", "Soluțiile sunt reale, dar iraționale:"))
-            steps.append(("Soluții", f"{L(Eq(x, simplify(root_expr[0])))} și {L(Eq(x, simplify(root_expr[1])))}."))
+            steps.append(("Soluții reale", f"{L(Eq(x, simplify(root_expr[0])))} și {L(Eq(x, simplify(root_expr[1])))}"))
     elif Delta == 0:
-        x0 = simplify(-B/(2*A))
-        steps.append(("Δ = 0", f"Rădăcină dublă: {L(Eq(x, x0))}."))
-        poly = a*x**2 + b*x + c
-        steps.append(("Scriere ca pătrat", f"{L(poly)} = {L(A*(x - x0)**2)}."))
+        x0 = simplify(-b/(2*a))
+        steps.append(("Rădăcină dublă", L(Eq(x,x0))))
+        steps.append(("Scriere ca pătrat", L(a*(x-x0)**2)))
     else:
-        steps.append(("Δ < 0", "Soluțiile sunt complexe:"))
-        steps.append(("Soluții", f"{L(Eq(x, simplify(root_expr[0])))} și {L(Eq(x, simplify(root_expr[1])))}."))
+        steps.append(("Δ < 0", "Soluții complexe"))
+        steps.append(("Soluții", f"{L(Eq(x, simplify(root_expr[0])))} și {L(Eq(x, simplify(root_expr[1])))}"))
 
     return steps
 
+# ----------------- Sisteme de ecuații liniare 2x2 -----------------
+def solve_linear_system_2x2(a1,b1,c1,a2,b2,c2):
+    eq1 = Eq(a1*x + b1*y, c1)
+    eq2 = Eq(a2*x + b2*y, c2)
+    steps = [("Sistemul inițial", f"{L(eq1)}, {L(eq2)}")]
+
+    # Eliminare x
+    det = a1*b2 - a2*b1
+    if det == 0:
+        steps.append(("Determinant zero", "Sistem dependent sau incompatibil"))
+        return steps
+    y_sol = simplify((c2*a1 - c1*a2)/(a1*b2 - a2*b1))
+    x_sol = simplify((c1 - b1*y_sol)/a1)
+    steps.append(("Rezolvare", f"x = {x_sol}, y = {y_sol}"))
+    return steps
+
+# ----------------- Funcții și derivate -----------------
+def derivative_steps(expr):
+    steps = []
+    steps.append(("Funcția inițială", L(expr)))
+    deriv = diff(expr,x)
+    steps.append(("Derivata", L(deriv)))
+    return steps, deriv
+
+# ----------------- Exerciții generate aleator -----------------
+def random_linear():
+    a = random.randint(1,10)
+    b = random.randint(-10,10)
+    c = random.randint(-10,10)
+    sol = (c-b)/a
+    return a,b,c,sol
+
+def random_quadratic():
+    a = random.randint(1,5)
+    x0 = random.randint(-5,5)
+    x1 = random.randint(-5,5)
+    poly = a*(x-x0)*(x-x1)
+    coeffs = poly.expand().as_poly().all_coeffs()
+    return coeffs, [x0,x1]
+
 # ----------------- UI -----------------
-st.title("🧮 Aplicație pentru învățarea matematicii — pași explicativi")
-st.write("Alege tipul problemei și parcurge **pas cu pas** rezolvarea. Formulele sunt randate în LaTeX.")
+st.title("🧮 Laborator Matematică Interactiv")
+st.write("Pași detaliați, grafice și exerciții")
 
-mode = st.selectbox("Alege tipul de exercițiu", ["Ecuație liniară (ax+b=cx+d)", "Ecuație de gradul II (ax²+bx+c=0)"])
+mode = st.selectbox("Tipul exercițiului", ["Ecuație liniară","Ecuație pătratică","Sistem 2x2","Derivare funcție","Exercițiu random"])
 
-# Session state pentru pași și index curent
-if "steps" not in st.session_state:
-    st.session_state.steps = []
-if "step_idx" not in st.session_state:
-    st.session_state.step_idx = 0
+if "steps" not in st.session_state: st.session_state.steps=[]
+if "step_idx" not in st.session_state: st.session_state.step_idx=0
 
 def reset_steps(new_steps):
-    st.session_state.steps = new_steps
-    st.session_state.step_idx = 0
+    st.session_state.steps=new_steps
+    st.session_state.step_idx=0
 
-if mode.startswith("Ecuație liniară"):
-    colA, colB, colC, colD = st.columns(4)
-    with colA: a = st.number_input("a", value=2, step=1)
-    with colB: b = st.number_input("b", value=5, step=1)
-    with colC: c = st.number_input("c", value=1, step=1)
-    with colD: d = st.number_input("d", value=-3, step=1)
-
+# ----------------- Input și pași -----------------
+if mode=="Ecuație liniară":
+    a = st.number_input("a",2)
+    b = st.number_input("b",5)
+    c = st.number_input("c",1)
+    d = st.number_input("d",-3)
     if st.button("Generează pașii"):
-        steps = build_linear_steps(a, b, c, d)
-        reset_steps(steps)
+        reset_steps(linear_steps(a,b,c,d))
 
-else:
-    colA, colB, colC = st.columns(3)
-    with colA: a = st.number_input("a", value=1, step=1)
-    with colB: b = st.number_input("b", value=-3, step=1)
-    with colC: c = st.number_input("c", value=2, step=1)
-
+elif mode=="Ecuație pătratică":
+    a = st.number_input("a",1)
+    b = st.number_input("b",-3)
+    c = st.number_input("c",2)
     if st.button("Generează pașii"):
-        steps = build_quadratic_steps(a, b, c)
-        reset_steps(steps)
+        reset_steps(quadratic_steps(a,b,c))
+        x_vals = np.linspace(-10,10,500)
+        y_vals = a*x_vals**2 + b*x_vals + c
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f"{a}x²+{b}x+{c}"))
+        fig.update_layout(title="Grafic interactiv",xaxis_title="x",yaxis_title="y",width=700,height=500)
+        st.plotly_chart(fig,use_container_width=True)
 
+elif mode=="Sistem 2x2":
+    col1,col2,col3=st.columns(3)
+    with col1:
+        a1=st.number_input("a1",1)
+        b1=st.number_input("b1",1)
+        c1=st.number_input("c1",0)
+    with col2:
+        a2=st.number_input("a2",1)
+        b2=st.number_input("b2",-1)
+        c2=st.number_input("c2",0)
+    if st.button("Generează pașii"):
+        reset_steps(solve_linear_system_2x2(a1,b1,c1,a2,b2,c2))
+
+elif mode=="Derivare funcție":
+    expr_str=st.text_input("Funcție polinomială (ex: x**3-5*x+2)","x**3-5*x+2")
+    if st.button("Calculează derivata"):
+        try:
+            expr=eval(expr_str)
+            steps, deriv = derivative_steps(expr)
+            reset_steps(steps)
+            # grafic interactiv
+            x_vals = np.linspace(-10,10,500)
+            y_vals = [expr.subs(x,val) for val in x_vals]
+            y_der = [deriv.subs(x,val) for val in x_vals]
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name="f(x)"))
+            fig.add_trace(go.Scatter(x=x_vals, y=y_der, mode='lines', name="f'(x)"))
+            fig.update_layout(title="Funcție și derivată",xaxis_title="x",yaxis_title="y",width=700,height=500)
+            st.plotly_chart(fig,use_container_width=True)
+        except:
+            st.error("Funcție invalidă")
+
+elif mode=="Exercițiu random":
+    tipo = st.selectbox("Tip exercițiu",["Liniar","Pătratic"])
+    if st.button("Generează exercițiu"):
+        if tipo=="Liniar":
+            a,b,c,sol = random_linear()
+            st.write(f"Rezolvă ecuația: {a}*x + {b} = {c}")
+            ans = st.number_input("Răspunsul tău",0)
+            if st.button("Verifică răspunsul"):
+                if ans==sol:
+                    st.success("Corect!")
+                else:
+                    st.error(f"Gresit. Răspuns corect: {sol}")
+        else:
+            coeffs, sols = random_quadratic()
+            st.write(f"Rezolvă ecuația: {coeffs[0]}*x² + {coeffs[1]}*x + {coeffs[2]} = 0")
+            x1 = st.number_input("x1",0)
+            x2 = st.number_input("x2",0)
+            if st.button("Verifică răspunsul"):
+                if set([x1,x2])==set(sols):
+                    st.success("Corect!")
+                else:
+                    st.error(f"Gresit. Răspuns corect: {sols}")
+
+# ----------------- Navigare pași -----------------
 st.divider()
-
-# Afișare pași + navigare
 if st.session_state.steps:
-    total = len(st.session_state.steps)
-    title, desc = st.session_state.steps[st.session_state.step_idx]
-    st.subheader(f"Pasul {st.session_state.step_idx + 1}/{total}: {title}")
+    total=len(st.session_state.steps)
+    title, desc=st.session_state.steps[st.session_state.step_idx]
+    st.subheader(f"Pas {st.session_state.step_idx+1}/{total}: {title}")
     st.markdown(desc)
 
-    c1, c2, c3 = st.columns([1, 2, 1])
+    c1,c2,c3=st.columns([1,2,1])
     with c1:
-        if st.button("⬅️ Înapoi", disabled=st.session_state.step_idx == 0):
-            st.session_state.step_idx = max(0, st.session_state.step_idx - 1)
+        if st.button("⬅️ Înapoi",disabled=st.session_state.step_idx==0):
+            st.session_state.step_idx-=1
     with c3:
-        if st.button("Înainte ➡️", disabled=st.session_state.step_idx >= total - 1):
-            st.session_state.step_idx = min(total - 1, st.session_state.step_idx + 1)
+        if st.button("Înainte ➡️",disabled=st.session_state.step_idx>=total-1):
+            st.session_state.step_idx+=1
 
-    st.slider("Sari la pas", 1, total, st.session_state.step_idx + 1, key="slider_jump")
-    # sincronizează slider-ul cu indexul
-    if st.session_state.slider_jump - 1 != st.session_state.step_idx:
-        st.session_state.step_idx = st.session_state.slider_jump - 1
-
-    with st.expander("Vezi toți pașii"):
-        for i, (t, d) in enumerate(st.session_state.steps, start=1):
-            st.markdown(f"**Pasul {i}: {t}**")
-            st.markdown(d)
-            st.markdown("---")
+    st.slider("Sari la pas",1,total,st.session_state.step_idx+1,key="slider_jump")
+    if st.session_state.slider_jump-1!=st.session_state.step_idx:
+        st.session_state.step_idx=st.session_state.slider_jump-1
 else:
-    st.info("Completează coeficienții și apasă **Generează pașii** pentru a porni.")
+    st.info("Generează pașii pentru a-i vizualiza aici.")
