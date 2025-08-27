@@ -1,2 +1,5 @@
 streamlit
 sympy
+plotly
+numpy
+
