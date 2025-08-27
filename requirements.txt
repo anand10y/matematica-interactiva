@@ -1,2 +1,6 @@
-streamlit run app.py
+streamlit
+sympy
+plotly
+
+
 
