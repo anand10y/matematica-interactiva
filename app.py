@@ -2,8 +2,6 @@ import streamlit as st
 from sympy import symbols, Eq, expand, factor, sqrt, latex, simplify
 from sympy import Rational, Integer
 import math
-import plotly.graph_objects as go
-import numpy as np
 
 st.set_page_config(page_title="Matematică Interactivă", page_icon="🧮", layout="centered")
 
@@ -58,7 +56,7 @@ def build_linear_steps(a, b, c, d):
     steps.append(("Răspuns", f"Soluția este {L(eq6)}"))
     return steps
 
-# ----------------- Pași ecuație pătratică -----------------
+# ----------------- Pași ecuație cuadratică -----------------
 def build_quadratic_steps(a, b, c):
     steps = []
     a, b, c = Integer(a), Integer(b), Integer(c)
@@ -100,7 +98,7 @@ def build_quadratic_steps(a, b, c):
 
 # ----------------- UI -----------------
 st.title("🧮 Matematică Interactivă")
-st.write("Pași detaliați și grafic pentru ecuații")
+st.write("Pași detaliați pentru rezolvarea ecuațiilor")
 
 mode = st.selectbox("Tipul problemei", ["Liniară", "Gradul II"])
 
@@ -113,7 +111,6 @@ def reset_steps(new_steps):
     st.session_state.steps = new_steps
     st.session_state.step_idx = 0
 
-# ----------------- Input coeficienți și pași -----------------
 if mode == "Liniară":
     colA, colB, colC, colD = st.columns(4)
     with colA: a = st.number_input("a", value=2, step=1)
@@ -122,7 +119,6 @@ if mode == "Liniară":
     with colD: d = st.number_input("d", value=-3, step=1)
     if st.button("Generează pașii"):
         reset_steps(build_linear_steps(a, b, c, d))
-
 else:
     colA, colB, colC = st.columns(3)
     with colA: a = st.number_input("a", value=1, step=1)
@@ -131,18 +127,6 @@ else:
     if st.button("Generează pașii"):
         reset_steps(build_quadratic_steps(a, b, c))
 
-        # ----------------- Grafic interactiv -----------------
-        x_vals = np.linspace(-10, 10, 500)
-        y_vals = a*x_vals**2 + b*x_vals + c
-        fig = go.Figure()
-        fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode='lines', name=f"{a}x²+{b}x+{c}"))
-        fig.update_layout(title="Grafic interactiv",
-                          xaxis_title="x",
-                          yaxis_title="y",
-                          width=700, height=500)
-        st.plotly_chart(fig, use_container_width=True)
-
-# ----------------- Navigare pași -----------------
 st.divider()
 
 if st.session_state.steps:
