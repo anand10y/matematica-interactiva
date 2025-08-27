@@ -1,5 +1,2 @@
-streamlit
-sympy
-plotly
-numpy
+streamlit run app.py
 
